@@ -1,0 +1,40 @@
+#!/bin/sh
+
+dialog=/ebrmain/cramfs/bin/dialog
+temp=/var/tmp/taranis
+logFile=/mnt/ext1/system/state/taranisVer.log
+taranis=/mnt/ext1/applications/taranis
+
+launchTaranis() { $taranis & exit; }
+
+downloadFile=$(curl -s https://api.github.com/repos/orontee/taranis/releases/latest | grep -wo "https.*/taranis.zip")
+# error if unable to get latest taranis info and taranis not already on system
+if [ "$downloadFile" == "" ] && [ ! -e "$taranis" ]; then
+    message=$(echo -e "Missing file!\nConnect to internet and try again.")
+    $dialog 3 "" "$message" "OK"; exit
+fi
+
+# immediately launch taranis if unable to get latest taranis info
+if [ "$downloadFile" == "" ]; then launchTaranis; fi
+
+# guarantee version mismatch - triggers update for first run or missing files 
+if [ ! -e "$logFile" ] || [ ! -e "$taranis" ]; then echo "<unknown>" > "$logFile"; fi
+
+# sets device and latest-online versions of taranis as variables
+latestVer=$(echo "$downloadFile" | grep -wo v.*/taranis.zip); latestVer=${latestVer//\/taranis.zip/}
+logVer=$(head -n 1 "$logFile")
+
+# if taranis versions on system and latest-online do not match, update triggered
+if [ "$latestVer" != "$logVer" ]; then
+    $dialog 1 "" "Taranis updating!" "PLEASE WAIT..." &
+    rm -rf $temp; mkdir $temp
+    wget $downloadFile -O $temp/taranis.zip
+    unzip -o $temp/taranis.zip *.app -d $temp
+    mv -f $temp/taranis.app $taranis
+    echo "$latestVer" > "$logFile"
+    message=$(echo -e "Taranis updated\nfrom: $logVer\nto: $latestVer")
+    $dialog 1 "" "$message" "OK"
+fi
+
+launchTaranis
+
